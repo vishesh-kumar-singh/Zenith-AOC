@@ -33,11 +33,27 @@ The system is organized into four core phases:
 
 ---
 
-## Architecture Diagram
+## Architecture Design
 
-The pipeline integrates data sources, middleware, agent orchestration, and dashboarding.
+### Complete Workflow.
 ![Pipeline Image](Images/Pipeline.png)
 The image can also be found [Here](https://github.com/vishesh-kumar-singh/Zenith-AOC/tree/main/Images/Pipeline.png)
+
+### Orchestral Pipeline
+![Pipeline Image](Images/Orchestral_Pipeline.png)
+The image can also be found [Here](https://github.com/vishesh-kumar-singh/Zenith-AOC/tree/main/Images/Orchestral_Pipeline.png)
+
+### Data Retrieval
+![Pipeline Image](Images/Retrieval.png)
+The image can also be found [Here](https://github.com/vishesh-kumar-singh/Zenith-AOC/tree/main/Images/Retrieval.png)
+
+### API Structure with System Design
+![Pipeline Image](Images/API_Structure.png)
+The image can also be found [Here](https://github.com/vishesh-kumar-singh/Zenith-AOC/tree/main/Images/API_Structure.png)
+
+### Predictive Model
+![Pipeline Image](Images/Predictive_Model.png)
+The image can also be found [Here](https://github.com/vishesh-kumar-singh/Zenith-AOC/tree/main/Images/Predictive_Model.png)
 
 ## Data Flow
 
@@ -102,163 +118,52 @@ Frontend Dashboard renders real-time insights.
 * REST + WebSockets: API gateway to dashboard.
 * Dashboard: single pane of glass for operators.
 
-## Database Schema
+## Database Schema Overview
+The database is structured to manage the entire lifecycle of an incident, from raw data ingestion to predictive analysis and agent observability. It is divided into five main logical sections.
 
 ### 1. Data Sources / Raw Events
+This section holds the raw, unprocessed data ingested from various external sources.
 
-```sql
-CREATE TABLE machine_status (
-    machine_id VARCHAR(50) NOT NULL,
-    timestamp TIMESTAMPTZ NOT NULL,
-    metric_name VARCHAR(50) NOT NULL,
-    metric_value DOUBLE PRECISION,
-    region VARCHAR(50),
-    PRIMARY KEY (machine_id, timestamp, metric_name)
-);
+- machine_status: Records time-series data from IoT sensors, like temperature or pressure readings from a specific machine at a specific time.
 
-CREATE TABLE slack_messages (
-    message_id VARCHAR(50) PRIMARY KEY,
-    channel VARCHAR(50),
-    user_id VARCHAR(50),
-    text TEXT,
-    timestamp TIMESTAMPTZ,
-    machine_id VARCHAR(50)
-);
+- slack_messages: Stores messages from Slack, capturing the content, user, channel, and timestamp.
 
-CREATE TABLE crm_tickets (
-    ticket_id VARCHAR(50) PRIMARY KEY,
-    customer_id VARCHAR(50),
-    status VARCHAR(20),
-    priority VARCHAR(10),
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    description TEXT
-);
+- crm_tickets: Contains details of customer support tickets, including their status, priority, and description.
 
-CREATE TABLE documents (
-    doc_id VARCHAR(50) PRIMARY KEY,
-    title TEXT,
-    source VARCHAR(50),
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    raw_text TEXT
-);
+- documents: Holds metadata for knowledge base articles and other documents.
 
-CREATE TABLE document_embeddings (
-    doc_id VARCHAR(50) REFERENCES documents(doc_id),
-    chunk_id SERIAL,
-    embedding VECTOR(1536),
-    bm25_index TEXT,
-    PRIMARY KEY (doc_id, chunk_id)
-);
-```
+- document_embeddings: Stores the vector representations of document chunks used for semantic search and Retrieval-Augmented Generation (RAG).
 
 ### 2. Analytics / Aggregates
+This part of the schema stores processed data and the results of analytical computations.
 
-```sql
-CREATE TABLE sensor_aggregates (
-    machine_id VARCHAR(50),
-    metric_name VARCHAR(50),
-    window_start TIMESTAMPTZ,
-    window_end TIMESTAMPTZ,
-    rolling_avg DOUBLE PRECISION,
-    rolling_std DOUBLE PRECISION,
-    anomaly_score DOUBLE PRECISION,
-    PRIMARY KEY (machine_id, metric_name, window_start)
-);
+- sensor_aggregates: Holds calculated metrics over time, such as rolling averages, standard deviations, and anomaly scores for sensor data.
 
-CREATE TABLE anomalies (
-    anomaly_id SERIAL PRIMARY KEY,
-    machine_id VARCHAR(50),
-    metric_name VARCHAR(50),
-    timestamp TIMESTAMPTZ,
-    value DOUBLE PRECISION,
-    z_score DOUBLE PRECISION,
-    severity VARCHAR(10),
-    description TEXT
-);
-```
+- anomalies: A log of detected anomalies, detailing when an unusual event occurred, its severity, and a description.
 
 ### 3. Incident / Agent Workflow
+This is the core operational section, tracking the state and progression of incidents as they are handled by the autonomous agents.
 
-```sql
-CREATE TABLE incidents (
-    incident_id VARCHAR(50) PRIMARY KEY,
-    source VARCHAR(50),
-    machine_id VARCHAR(50),
-    status VARCHAR(20),
-    priority VARCHAR(5),
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
+- incidents: The main table for tracking an issue from creation to resolution. It includes status, priority, and source.
 
-CREATE TABLE investigation_reports (
-    report_id SERIAL PRIMARY KEY,
-    incident_id VARCHAR(50) REFERENCES incidents(incident_id),
-    investigator_id VARCHAR(50),
-    hypothesis TEXT,
-    confidence FLOAT,
-    created_at TIMESTAMPTZ
-);
+- investigation_reports: Contains the findings of the Investigator agent, including its hypothesis about the root cause of an incident.
 
-CREATE TABLE evidence (
-    evidence_id SERIAL PRIMARY KEY,
-    report_id INT REFERENCES investigation_reports(report_id),
-    source VARCHAR(50),
-    type VARCHAR(50),
-    details JSONB,
-    timestamp TIMESTAMPTZ
-);
+- evidence: Stores the specific data points and logs that support an investigation report.
 
-CREATE TABLE resolution_plans (
-    plan_id SERIAL PRIMARY KEY,
-    incident_id VARCHAR(50) REFERENCES incidents(incident_id),
-    resolution_steps JSONB,
-    executed BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ,
-    executed_at TIMESTAMPTZ
-);
+- resolution_plans: Details the step-by-step actions proposed by the Resolution agent to fix an incident.
 
-CREATE TABLE audits (
-    audit_id SERIAL PRIMARY KEY,
-    incident_id VARCHAR(50) REFERENCES incidents(incident_id),
-    auditor_id VARCHAR(50),
-    action VARCHAR(20),
-    comments TEXT,
-    timestamp TIMESTAMPTZ
-);
-```
+- audits: A log of all decisions made by the Auditor agent, such as approving or rejecting a proposed resolution plan.
 
 ### 4. Predictive Agent / Risk Forecasts
+This section is dedicated to storing the outputs of the predictive models.
 
-```sql
-CREATE TABLE predictive_forecasts (
-    forecast_id SERIAL PRIMARY KEY,
-    machine_id VARCHAR(50),
-    metric_name VARCHAR(50),
-    forecast_time TIMESTAMPTZ,
-    predicted_value DOUBLE PRECISION,
-    confidence DOUBLE PRECISION,
-    created_at TIMESTAMPTZ
-);
-```
+- predictive_forecasts: Contains future predictions, such as the forecasted failure time for a machine or a predicted spike in customer tickets.
 
 ### 5. Tool Call Logs (Observability)
+This section is for system monitoring and debugging, providing a transparent view of the agents' activities.
 
-```sql
-CREATE TABLE tool_calls (
-    call_id SERIAL PRIMARY KEY,
-    agent_id VARCHAR(50),
-    tool_name VARCHAR(50),
-    request JSONB,
-    response JSONB,
-    latency_ms INT,
-    tokens_used INT,
-    timestamp TIMESTAMPTZ
-);
-```
+- tool_calls: A detailed log of every tool used by an agent, recording what was requested, what was returned, and how long it took. This is crucial for observability.
 
-This schema covers raw ingestion, analytics, multi-agent workflows, predictive monitoring, and observability.
 
 ---
 
